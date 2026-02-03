@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selangor Rainfall Calculator</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        select, input, button {
+            padding: 8px;
+            width: 100%;
+            max-width: 300px;
+            box-sizing: border-box;
+        }
+        button {
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #output {
+            background-color: #f4f4f4;
+            padding: 15px;
+            border: 1px solid #ddd;
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Rainfall Data Calculator</h1>
+    
+    <div class="form-group">
+        <label for="location">Location (Selangor):</label>
+        <select id="location">
+            <option value="3.0738,101.5183">Shah Alam</option>
+            <option value="3.1073,101.6067">Petaling Jaya</option>
+            <option value="3.0442,101.4448">Klang</option>
+            <option value="2.9935,101.7874">Kajang</option>
+            <option value="2.6934,101.7483">Sepang (KLIA)</option>
+            <option value="3.2535,101.6533">Rawang</option>
+            <option value="3.3486,101.2471">Kuala Selangor</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="date">Date:</label>
+        <input type="date" id="date">
+    </div>
+
+    <button onclick="calculateRainfall()">Get Rainfall Data</button>
+
+    <div id="output">Results will appear here...</div>
+
+    <script>
+        document.getElementById('date').valueAsDate = new Date();
+
+        async function calculateRainfall() {
+            const locationSelect = document.getElementById('location');
+            const dateInput = document.getElementById('date');
+            const outputDiv = document.getElementById('output');
+
+            const [lat, lon] = locationSelect.value.split(',');
+            const locationName = locationSelect.options[locationSelect.selectedIndex].text;
+            const selectedDateStr = dateInput.value;
+
+            if (!selectedDateStr) {
+                alert("Please select a date");
+                return;
+            }
+
+            outputDiv.textContent = "Fetching data...";
+
+            const endDate = new Date(selectedDateStr);
+            const startDate = new Date(endDate);
+            startDate.setDate(endDate.getDate() - 29);
+
+            const formatDate = (date) => date.toISOString().split('T')[0];
+
+            const apiUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${formatDate(startDate)}&end_date=${formatDate(endDate)}&daily=rain_sum&timezone=Asia%2FSingapore`;
+
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error("API Request Failed");
+                
+                const data = await response.json();
+                
+                const daily = data.daily;
+                const rainSum = daily.rain_sum;
+                const dates = daily.time;
+                
+                const len = rainSum.length;
+                
+                const rain1Day = rainSum[len - 1];
+                const date1Day = dates[len - 1];
+
+                let rain3Day = 0;
+                let date3DayStart = "";
+                if (len >= 3) {
+                    rain3Day = rainSum.slice(len - 3).reduce((a, b) => a + b, 0);
+                    date3DayStart = dates[len - 3];
+                }
+
+                const rain30Day = rainSum.reduce((a, b) => a + b, 0);
+                const date30DayStart = dates[0];
+
+                const result = {
+                    Location: locationName,
+                    Date: selectedDateStr,
+                    "1-day": `${rain1Day.toFixed(1)} mm (${date1Day})`,
+                    "3-day": `${rain3Day.toFixed(1)} mm (${date3DayStart} – ${date1Day})`,
+                    "30-day": `${rain30Day.toFixed(1)} mm (${date30DayStart} – ${date1Day})`
+                };
+
+                const formattedOutput = 
+`Location: ${result.Location}
+Date: ${result.Date}
+1-day: ${result["1-day"]}
+3-day: ${result["3-day"]}
+30-day: ${result["30-day"]}
+
+Raw API Response Length: ${len} days fetched`;
+
+                outputDiv.textContent = JSON.stringify(result, null, 2) + "\n\n--- Formatted ---\n" + formattedOutput;
+
+            } catch (error) {
+                console.error(error);
+                outputDiv.textContent = "Error: " + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
